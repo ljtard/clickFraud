@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/">
+        <file>img/rec.png</file>
+        <file>jquery-1.5.js</file>
+    </qresource>
+</RCC>
