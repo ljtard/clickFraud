@@ -2,5 +2,7 @@
     <qresource prefix="/">
         <file>img/rec.png</file>
         <file>jquery-1.5.js</file>
+        <file>img/refresh.png</file>
+        <file>img/refresh_enable.png</file>
     </qresource>
 </RCC>

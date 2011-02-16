@@ -11,7 +11,8 @@ OBJECTS_DIR = build
 MOC_DIR = build
 UI_DIR = build
 CONFIG += console
-INCLUDEPATH += src
+INCLUDEPATH += src \
+                build
 
 
 CONFIG += console \

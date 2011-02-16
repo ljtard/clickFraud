@@ -11,6 +11,7 @@
 #include <QAction>
 #include <QLabel>
 #include <QMouseEvent>
+#include <QSystemTrayIcon>
 #include "mywebview.h"
 
 namespace Ui {
@@ -43,22 +44,27 @@ private slots:
     void doSomthing();
     void printError( QNetworkReply::NetworkError error );
     void startStop( bool e);
+    void onTrayActivated(QSystemTrayIcon::ActivationReason r );
 
 
 protected:
     void changeEvent(QEvent *e);
-    bool event(QEvent * event);
 
 private:
     void randomizeBlogUpdateTimer();
     void randomizeBlogActivityTimer();
     bool loadJQuery();
+    int loadBlogsFromData( QString data );
 
     QSettings settings;
+
     Ui::MainWindow *ui;
     MyNetworkAccessManager nam;
     QAction *enable;
     QLabel *version;
+    QSystemTrayIcon *trayIcon;
+    QMenu *trayIconMenu;
+
 
     QString jQuery;
 

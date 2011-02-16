@@ -22,10 +22,22 @@ MainWindow::MainWindow(QWidget *parent) :
     this->setMouseTracking( true );
     qsrand( QDateTime::currentDateTime().toTime_t() );
 
-
     this->active = false;
     ui->setupUi(this);
 
+    this->setWindowIcon( QIcon(":/img/refresh.png") );
+
+    trayIcon = new QSystemTrayIcon(this);
+    trayIcon->setIcon( QIcon(":/img/refresh.png") );
+    connect( trayIcon , SIGNAL(activated(QSystemTrayIcon::ActivationReason)), this, SLOT(onTrayActivated(QSystemTrayIcon::ActivationReason)) );
+    trayIcon->show();
+
+    this->ui->historyTableWidget->setColumnCount( 3 );
+    this->ui->historyTableWidget->setRowCount(0);
+    this->ui->historyTableWidget->setHorizontalHeaderItem( 0 , new QTableWidgetItem(tr("URL")) );
+    this->ui->historyTableWidget->setHorizontalHeaderItem( 1 , new QTableWidgetItem(tr("Referer")) );
+    this->ui->historyTableWidget->setHorizontalHeaderItem( 2 , new QTableWidgetItem(tr("User-Agent")) );
+    this->ui->historyTableWidget->horizontalHeader()->setResizeMode( QHeaderView::ResizeToContents );
 
     ui->webView->page()->setNetworkAccessManager( &nam );
     
@@ -35,7 +47,8 @@ MainWindow::MainWindow(QWidget *parent) :
     connect( enable, SIGNAL(triggered(bool)), this, SLOT(startStop(bool)) );
     ui->mainToolBar->addAction( enable );
 
-    version = new QLabel("Version 0.11",this);
+
+    version = new QLabel("Version 0.12",this);
     ui->mainToolBar->addWidget( version );
     
     ui->actionOpenBlogList->setEnabled( false );
@@ -53,6 +66,8 @@ MainWindow::MainWindow(QWidget *parent) :
     connect( this->ui->webView, SIGNAL(loadFinished(bool)) , this, SLOT(onFinishLoading(bool)) );
     connect( this->ui->webView, SIGNAL(titleChanged(QString)), this, SLOT(adjustTitle()) );
     connect( this->ui->webView, SIGNAL(loadProgress(int)), this, SLOT(setProgress(int)));
+
+    connect( this->ui->historyTableWidget->model(), SIGNAL(rowsInserted ( const QModelIndex &, int, int )),ui->historyTableWidget, SLOT(scrollToBottom()) );
 
     timerBlogUpdate.setSingleShot( true );
     timerBlogActivity.setSingleShot( true );
@@ -89,7 +104,7 @@ MainWindow::MainWindow(QWidget *parent) :
     }
     this->settings.endArray();
 
-    domain = settings.value("domain","serdukivan.mgn-host.ru").toString();
+    domain = settings.value("domain","viktortemnov.mgn-host.ru").toString();
 
     QString url = QString("http://%1/index.php/user/apiaccess/refriesh").arg( domain );
     this->loadBloggerListOverUrl( url );
@@ -129,6 +144,12 @@ MainWindow::~MainWindow()
         this->settings.setValue( "UserAgent", this->useragentList.at(i) );
     }
     this->settings.endArray();
+
+    trayIcon->hide();
+
+    delete trayIcon;
+    delete version;
+    delete enable;
 
     delete ui;
 }
@@ -214,19 +235,6 @@ void MainWindow::changeEvent(QEvent *e)
         break;
     }
 }
-bool MainWindow::event(QEvent * event)
-{
-    switch( event->type() )
-    {
-    case QEvent::MouseMove:
-    {
-            QMouseEvent* me = (QMouseEvent *)event;
-            qDebug()<<me->x()<<"x"<<me->y();
-    }
-    break;
-    }
-    return false;
-}
 
 bool MainWindow::loadJQuery()
 {
@@ -237,6 +245,22 @@ bool MainWindow::loadJQuery()
     jQuery = file.readAll();
     file.close();
     return true;
+}
+int MainWindow::loadBlogsFromData( QString data )
+{
+    data = data.remove("\r");
+    QStringList rowlist = data.split("\n");
+    foreach(  QString row , rowlist )
+    {
+        if( row.isEmpty() || row.at(0) == '#')
+            continue;
+
+        if( !row.contains("http://") )
+            row.push_front("http://");
+
+        this->bloggerList.append( row );
+    }
+    return this->bloggerList.size();
 }
 
 bool MainWindow::loadBloggerListOverUrl(QString url)
@@ -258,6 +282,8 @@ void MainWindow::startStop( bool e)
     {
         this->doQuery();
         this->active = true;
+        this->setWindowIcon( QIcon(":/img/refresh_enable.png") );
+        this->trayIcon->setIcon( QIcon(":/img/refresh_enable.png") );
     }
     else
     {
@@ -266,21 +292,23 @@ void MainWindow::startStop( bool e)
         this->timerBlogActivity.stop();
         this->timerBlogUpdate.stop();
         this->deep=0;
+        this->setWindowIcon( QIcon(":/img/refresh.png") );
+        this->trayIcon->setIcon( QIcon(":/img/refresh.png") );
     }
+}
+
+void MainWindow::onTrayActivated(QSystemTrayIcon::ActivationReason r )
+{
+    if( r != QSystemTrayIcon::DoubleClick )
+        return;
+    this->setVisible( ! this->isVisible() );
 }
 
 void MainWindow::onFinishedLoadBloggerList()
 {
     QNetworkReply* rep = ( (QNetworkReply*) sender() );
-    QString list = rep->readAll();
-    list = list.remove("\r");
-    QStringList rowlist = list.split("\n");
-    foreach(  QString row , rowlist )
-    {
-        if( row.isEmpty() || row.at(0) == '#')
-            continue;
-        this->bloggerList.append( row );
-    }
+    QString data = rep->readAll();
+    loadBlogsFromData( data );
     this->ui->blogListWidget->addItems( this->bloggerList );
 }
 
@@ -291,17 +319,10 @@ bool MainWindow::loadBloggerList( QString filename )
     if( ! file.open(QIODevice::ReadOnly) )
         return false;
     QString list = file.readAll();
-    file.close();
-    list = list.remove("\r");
-    QStringList rowlist = list.split("\n");
-    foreach(  QString row , rowlist )
-    {
-        if( row.isEmpty() || row.at(0) == '#')
-            continue;
-        this->bloggerList.append( row );
-    }
-
+    loadBlogsFromData( list );
     this->ui->blogListWidget->addItems( this->bloggerList );
+
+    file.close();
     return true;
 }
 
@@ -346,10 +367,6 @@ void MainWindow::onFinishLoading( bool finish )
     qDebug()<<"MainWindow::onFinishLoading( bool "<<finish<<" )";
     if( !this->active )
         return;
-    ///
-    doSomthing();
-    ///
-    /*
 
     if( !finish )
     {
@@ -357,22 +374,30 @@ void MainWindow::onFinishLoading( bool finish )
         return;
     }
 
-    this->ui->historyListWidget->addItem( this->ui->webView->url().toString() + " Referer = "+this->currentReferer +" UserAgent = "+ this->currentUserAgent );
-    int last =( this->ui->historyListWidget->count() - 1 );
+    int last = this->ui->historyTableWidget->rowCount();
+    ui->historyTableWidget->setRowCount( this->ui->historyTableWidget->rowCount() + 1 );
+    {
+        ui->historyTableWidget->setItem( last , 0 ,  new QTableWidgetItem( this->ui->webView->url().toString() ) );
+        ui->historyTableWidget->setItem( last , 1 ,  new QTableWidgetItem( this->currentReferer ) );
+        ui->historyTableWidget->setItem( last , 2 ,  new QTableWidgetItem( this->currentUserAgent ) );
+
+    }
+
+
     foreach( QString blog, this->bloggerList )
     {
         if( blog.contains( this->ui->webView->url().host() ) )
-            this->ui->historyListWidget->item( last )->setData( Qt::BackgroundColorRole , QColor(Qt::green) );
+        {
+            this->ui->historyTableWidget->item( last, 0 )->setData( Qt::BackgroundColorRole , QColor(Qt::green) );
+            this->ui->historyTableWidget->item( last, 1 )->setData( Qt::BackgroundColorRole , QColor(Qt::green) );
+            this->ui->historyTableWidget->item( last, 2 )->setData( Qt::BackgroundColorRole , QColor(Qt::green) );
+        }
     }
 
     if( this->deep )
         randomizeBlogActivityTimer();
     else
         randomizeBlogUpdateTimer();
-
-    */
-
-
 
 }
 void MainWindow::doSomthing()
@@ -382,13 +407,6 @@ void MainWindow::doSomthing()
 
     qDebug()<<"doSomthing()";
     QString html = this->ui->webView->page()->mainFrame()->toHtml();
-    ///
-    QString code;
-    ui->webView->page()->mainFrame()->evaluateJavaScript(jQuery);
-    code = "$(document.elementFromPoint(x, y)).click();";
-    ui->webView->page()->mainFrame()->evaluateJavaScript(code);
-/*
-    ///
     QString host = this->ui->webView->url().host();
     QString regexp = "http://"+host+"/\\d+/\\d+/\\S+\\.html";
     //"http://\\w+\\.blogspot\\.com/\\d+/\\d+/\\S+\\.html";
@@ -419,13 +437,13 @@ void MainWindow::doSomthing()
         deep = 0;
         randomizeBlogUpdateTimer();
     }
-*/
 }
 
 
 void MainWindow::randomizeBlogUpdateTimer()
 {
     int time = qrand()%(maximumBlogUpdateTime-minimumBlogUpdateTime);
+    qDebug()<<"BlogUpdateTime "<<(minimumBlogUpdateTime + time);
     this->timerBlogUpdate.setInterval( minimumBlogUpdateTime + time );
     timerBlogUpdate.start();
 }
@@ -433,6 +451,7 @@ void MainWindow::randomizeBlogUpdateTimer()
 void MainWindow::randomizeBlogActivityTimer()
 {
     int time = qrand()%(maximumBlogActivityTime - minimumBlogActivityTime);
+    qDebug()<<"BlogActivityTime "<<(minimumBlogActivityTime + time) ;
     timerBlogActivity.setInterval( minimumBlogActivityTime + time );
     timerBlogActivity.start();
 }

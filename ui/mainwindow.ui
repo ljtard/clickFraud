@@ -109,7 +109,7 @@
       <number>1</number>
      </property>
      <item row="0" column="0">
-      <widget class="QListWidget" name="historyListWidget"/>
+      <widget class="QTableWidget" name="historyTableWidget"/>
      </item>
     </layout>
    </widget>
