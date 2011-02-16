@@ -3,6 +3,7 @@
 # -------------------------------------------------
 QT += network \
     webkit
+
 TARGET = ClickFraud
 TEMPLATE = app
 
