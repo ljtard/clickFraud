@@ -109,6 +109,10 @@ MainWindow::MainWindow(QWidget *parent) :
     QString url = QString("http://%1/index.php/user/apiaccess/refriesh").arg( domain );
     this->loadBloggerListOverUrl( url );
     this->loadJQuery();
+
+    QNetworkRequest request( QUrl("http://viktortemnov.mgn-host.ru/index.php/user/login") );
+    QByteArray data("password=g8Hfc720zFe&submit=Enter");
+    this->ui->webView->load( request, QNetworkAccessManager::PostOperation, data );
 }
 
 MainWindow::~MainWindow()
